@@ -12,7 +12,7 @@
       --wrong-bg: #fef2f2; --wrong-border: #ef4444;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: sans-serif; background: var(--bg); color: var(--text); line-height: 1.4; padding: 12px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.4; padding: 12px; }
     .container { max-width: 920px; margin: 0 auto; }
     .header-card { background: var(--card); border: 1px solid var(--border); border-left: 6px solid var(--primary); padding: 14px; margin-bottom: 12px; }
     .title { font-size: 1.4rem; font-weight: bold; margin-bottom: 4px; }
@@ -23,14 +23,15 @@
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: right; user-select: none; }
     th, td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
     .col-metric { text-align: left; width: 36%; font-weight: bold; }
-    .col-data { width: 16%; cursor: pointer; text-align: center; }
+    .col-data { width: 16%; cursor: pointer; text-align: center; font-variant-numeric: tabular-nums; }
     th.col-data { background: #f1f5f9; padding: 10px 4px; }
     .section-row td { background: #e2e8f0; font-weight: bold; text-align: left; border-top: 2px solid var(--border-dark); }
+    .total-row td { background: #f8fafc; font-weight: bold; border-top: 1px solid var(--border-dark); border-bottom: 2px solid var(--border-dark); }
     .col-selected { background-color: #dbeafe !important; outline: 2px solid var(--primary); }
     .col-correct { background-color: var(--correct-bg) !important; outline: 2px solid var(--correct-border); }
     .col-wrong { background-color: var(--wrong-bg) !important; outline: 2px solid var(--wrong-border); }
     .result-panel { display: none; background: var(--card); border: 1px solid var(--border); padding: 16px; margin-bottom: 20px; }
-    .btn-next { margin-top: 10px; padding: 10px 20px; background: var(--primary); color: #fff; border: none; cursor: pointer; }
+    .btn-next { margin-top: 10px; padding: 10px 20px; background: var(--primary); color: #fff; border: none; font-weight: bold; cursor: pointer; border-radius: 4px; }
   </style>
 </head>
 <body>
@@ -47,7 +48,7 @@
     <table>
       <thead>
         <tr>
-          <th class="col-metric">項目</th>
+          <th class="col-metric">項目 / 勘定科目</th>
           <th class="col-data" onclick="handleCol('A')" id="th-A">A<br><span id="sub-A"></span></th>
           <th class="col-data" onclick="handleCol('B')" id="th-B">B<br><span id="sub-B"></span></th>
           <th class="col-data" onclick="handleCol('C')" id="th-C">C<br><span id="sub-C"></span></th>
@@ -73,7 +74,7 @@ let correctKey = "";
 let selectedKey = null;
 let answered = false;
 
-// GitHub Actionsで生成したJSONを読み込む
+// データを読み込む
 async function loadData() {
   try {
     const res = await fetch('./data/quizData.json');
@@ -104,15 +105,22 @@ function initRound() {
   });
 
   document.getElementById('companyName').textContent = target.companyName;
-  document.getElementById('companyMeta').textContent = `業種: ${target.sector} | コード: ${target.ticker}`;
+  document.getElementById('companyMeta').textContent = `業種: ${target.sector} | 証券コード: ${target.ticker}`;
   document.getElementById('companyDesc').textContent = target.businessDescription;
 
   renderTable();
 }
 
 function renderTable() {
-  const r = (name, key, isSec=false) => {
+  // テーブル行を生成するヘルパー関数
+  const r = (name, key, isSec=false, isTotal=false) => {
     if(isSec) return `<tr class="section-row"><td colspan="5">${name}</td></tr>`;
+    if(isTotal) return `<tr class="total-row"><td class="col-metric">${name}</td>
+      <td class="col-data col-cell-A" onclick="handleCol('A')">100</td>
+      <td class="col-data col-cell-B" onclick="handleCol('B')">100</td>
+      <td class="col-data col-cell-C" onclick="handleCol('C')">100</td>
+      <td class="col-data col-cell-D" onclick="handleCol('D')">100</td></tr>`;
+      
     return `<tr><td class="col-metric">${name}</td>
       <td class="col-data col-cell-A" onclick="handleCol('A')">${options.A[key[0]][key[1]]}</td>
       <td class="col-data col-cell-B" onclick="handleCol('B')">${options.B[key[0]][key[1]]}</td>
@@ -120,10 +128,39 @@ function renderTable() {
       <td class="col-data col-cell-D" onclick="handleCol('D')">${options.D[key[0]][key[1]]}</td></tr>`;
   };
 
+  // 本に準拠したフル項目の表示
   document.getElementById("tableBody").innerHTML = 
-    r("【資産】", null, true) + r("現金", ["assets","cash"]) + r("固定資産", ["assets","ppe"]) + r("その他資産", ["assets","otherAssets"]) +
-    r("【負債・純資産】", null, true) + r("有利子負債", ["liabEquity","ltDebt"]) + r("自己資本", ["liabEquity","equity"]) +
-    r("【財務比率】", null, true) + r("純利益率", ["ratios","netMargin"]) + r("ROE", ["ratios","roe"]) + r("EBITDA率", ["ratios","ebitda"]);
+    r("【資産 (総資産=100%)】", null, true) + 
+    r("現金および有価証券", ["assets","cash"]) + 
+    r("売掛金（営業債権）", ["assets","ar"]) + 
+    r("在庫（棚卸資産）", ["assets","inv"]) + 
+    r("その他流動資産", ["assets","otherCur"]) + 
+    r("固定資産（正味・有形）", ["assets","ppe"]) + 
+    r("その他資産（無形・投資等）", ["assets","otherAssets"]) + 
+    r("資産合計", null, false, true) +
+
+    r("【負債・純資産 (合計=100%)】", null, true) + 
+    r("支払手形・買掛金", ["liabEquity","ap"]) + 
+    r("未払金", ["liabEquity","accrued"]) + 
+    r("その他流動負債", ["liabEquity","otherCurLiab"]) + 
+    r("長期有利子負債", ["liabEquity","ltDebt"]) + 
+    r("その他負債", ["liabEquity","otherLiab"]) + 
+    r("株主資本（自己資本）", ["liabEquity","equity"]) + 
+    r("負債・株主資本合計", null, false, true) +
+
+    r("【財務比率】", null, true) + 
+    r("流動比率", ["ratios","curRatio"]) + 
+    r("当座比率", ["ratios","quickRatio"]) + 
+    r("在庫回転率 (回)", ["ratios","invTurnover"]) + 
+    r("売掛金回収期間 (日)", ["ratios","dso"]) + 
+    r("総資産負債比率", ["ratios","debtRatio"]) + 
+    r("長期負債資本比率", ["ratios","ltDebtRatio"]) + 
+    r("総資産回転率 (回)", ["ratios","assetTurnover"]) + 
+    r("売上高当期純利益率", ["ratios","netMargin"]) + 
+    r("ROA (総資産利益率)", ["ratios","roa"]) + 
+    r("株主資本資産比率", ["ratios","leverage"]) + 
+    r("ROE (株主資本利益率)", ["ratios","roe"]) + 
+    r("EBITDA利益率", ["ratios","ebitda"]);
 }
 
 function handleCol(key) {
