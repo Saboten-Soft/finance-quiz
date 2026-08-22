@@ -1,17 +1,169 @@
-let quizDataset = [];
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>財務諸表クイズ</title>
+  <style>
+    :root {
+      --bg: #f8fafc; --card: #ffffff; --text: #0f172a; --text-muted: #64748b;
+      --border: #cbd5e1; --border-dark: #334155; --primary: #2563eb;
+      --correct-bg: #ecfdf5; --correct-border: #10b981;
+      --wrong-bg: #fef2f2; --wrong-border: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: var(--bg); color: var(--text); line-height: 1.4; padding: 12px; }
+    .container { max-width: 920px; margin: 0 auto; }
+    .header-card { background: var(--card); border: 1px solid var(--border); border-left: 6px solid var(--primary); padding: 14px; margin-bottom: 12px; }
+    .title { font-size: 1.4rem; font-weight: bold; margin-bottom: 4px; }
+    .meta { font-size: 0.85rem; color: var(--primary); font-weight: bold; margin-bottom: 4px; }
+    .desc { font-size: 0.9rem; margin-bottom: 8px; }
+    .guide { font-size: 0.8rem; background: #f1f5f9; padding: 4px; display: inline-block; }
+    .table-box { background: var(--card); border: 1px solid var(--border-dark); overflow-x: auto; margin-bottom: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: right; user-select: none; }
+    th, td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+    .col-metric { text-align: left; width: 36%; font-weight: bold; }
+    .col-data { width: 16%; cursor: pointer; text-align: center; }
+    th.col-data { background: #f1f5f9; padding: 10px 4px; }
+    .section-row td { background: #e2e8f0; font-weight: bold; text-align: left; border-top: 2px solid var(--border-dark); }
+    .col-selected { background-color: #dbeafe !important; outline: 2px solid var(--primary); }
+    .col-correct { background-color: var(--correct-bg) !important; outline: 2px solid var(--correct-border); }
+    .col-wrong { background-color: var(--wrong-bg) !important; outline: 2px solid var(--wrong-border); }
+    .result-panel { display: none; background: var(--card); border: 1px solid var(--border); padding: 16px; margin-bottom: 20px; }
+    .btn-next { margin-top: 10px; padding: 10px 20px; background: var(--primary); color: #fff; border: none; cursor: pointer; }
+  </style>
+</head>
+<body>
 
-// ページ読み込み時に外部JSONを取得
-async function loadGameData() {
+<div class="container">
+  <div class="header-card">
+    <div class="title" id="companyName">読み込み中...</div>
+    <div class="meta" id="companyMeta"></div>
+    <div class="desc" id="companyDesc"></div>
+    <div class="guide">💡 列をタップで選択 → 同じ列をもう一度タップで決定</div>
+  </div>
+
+  <div class="table-box">
+    <table>
+      <thead>
+        <tr>
+          <th class="col-metric">項目</th>
+          <th class="col-data" onclick="handleCol('A')" id="th-A">A<br><span id="sub-A"></span></th>
+          <th class="col-data" onclick="handleCol('B')" id="th-B">B<br><span id="sub-B"></span></th>
+          <th class="col-data" onclick="handleCol('C')" id="th-C">C<br><span id="sub-C"></span></th>
+          <th class="col-data" onclick="handleCol('D')" id="th-D">D<br><span id="sub-D"></span></th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="result-panel" id="resultPanel">
+    <h3 id="resultVerdict"></h3>
+    <p id="resultExplanation"></p>
+    <button class="btn-next" onclick="initRound()">次の問題へ</button>
+  </div>
+</div>
+
+<script>
+let quizData = [];
+let target = null;
+let options = {};
+let correctKey = "";
+let selectedKey = null;
+let answered = false;
+
+// GitHub Actionsで生成したJSONを読み込む
+async function loadData() {
   try {
     const res = await fetch('./data/quizData.json');
-    if (!res.ok) throw new Error('Data load failed');
-    quizDataset = await res.json();
+    if (!res.ok) throw new Error();
+    quizData = await res.json();
     initRound();
-  } catch (err) {
-    document.getElementById("companyName").textContent = "データ読み込みエラー";
-    document.getElementById("companyDesc").textContent = "data/quizData.json が見つからないか、取得に失敗しました。";
-    console.error(err);
+  } catch (e) {
+    document.getElementById('companyName').textContent = "エラー";
+    document.getElementById('companyDesc').textContent = "データ(data/quizData.json)が見つかりません。GitHub Actionsの実行をお待ちください。";
   }
 }
 
-window.onload = loadGameData;
+function initRound() {
+  answered = false; selectedKey = null;
+  document.getElementById("resultPanel").style.display = "none";
+  ['A','B','C','D'].forEach(k => {
+    document.getElementById(`th-${k}`).className = "col-data";
+    document.getElementById(`sub-${k}`).textContent = "";
+  });
+
+  const pool = [...quizData].sort(() => 0.5 - Math.random());
+  target = pool[0];
+  const currentOps = pool.slice(0, 4).sort(() => 0.5 - Math.random());
+  
+  ['A','B','C','D'].forEach((k, i) => {
+    options[k] = currentOps[i];
+    if(options[k].ticker === target.ticker) correctKey = k;
+  });
+
+  document.getElementById('companyName').textContent = target.companyName;
+  document.getElementById('companyMeta').textContent = `業種: ${target.sector} | コード: ${target.ticker}`;
+  document.getElementById('companyDesc').textContent = target.businessDescription;
+
+  renderTable();
+}
+
+function renderTable() {
+  const r = (name, key, isSec=false) => {
+    if(isSec) return `<tr class="section-row"><td colspan="5">${name}</td></tr>`;
+    return `<tr><td class="col-metric">${name}</td>
+      <td class="col-data col-cell-A" onclick="handleCol('A')">${options.A[key[0]][key[1]]}</td>
+      <td class="col-data col-cell-B" onclick="handleCol('B')">${options.B[key[0]][key[1]]}</td>
+      <td class="col-data col-cell-C" onclick="handleCol('C')">${options.C[key[0]][key[1]]}</td>
+      <td class="col-data col-cell-D" onclick="handleCol('D')">${options.D[key[0]][key[1]]}</td></tr>`;
+  };
+
+  document.getElementById("tableBody").innerHTML = 
+    r("【資産】", null, true) + r("現金", ["assets","cash"]) + r("固定資産", ["assets","ppe"]) + r("その他資産", ["assets","otherAssets"]) +
+    r("【負債・純資産】", null, true) + r("有利子負債", ["liabEquity","ltDebt"]) + r("自己資本", ["liabEquity","equity"]) +
+    r("【財務比率】", null, true) + r("純利益率", ["ratios","netMargin"]) + r("ROE", ["ratios","roe"]) + r("EBITDA率", ["ratios","ebitda"]);
+}
+
+function handleCol(key) {
+  if (answered) return;
+  if (selectedKey === key) {
+    submit(key);
+  } else {
+    selectedKey = key;
+    ['A','B','C','D'].forEach(k => {
+      document.getElementById(`th-${k}`).classList.remove("col-selected");
+      document.querySelectorAll(`.col-cell-${k}`).forEach(c => c.classList.remove("col-selected"));
+      document.getElementById(`sub-${k}`).textContent = (k === key) ? "タップで決定" : "";
+    });
+    document.getElementById(`th-${key}`).classList.add("col-selected");
+    document.querySelectorAll(`.col-cell-${key}`).forEach(c => c.classList.add("col-selected"));
+  }
+}
+
+function submit(key) {
+  answered = true;
+  const isCorrect = (key === correctKey);
+  
+  ['A','B','C','D'].forEach(k => {
+    const th = document.getElementById(`th-${k}`);
+    const cls = (k === correctKey) ? "col-correct" : (k === key ? "col-wrong" : "");
+    if(cls) th.classList.add(cls);
+    document.querySelectorAll(`.col-cell-${k}`).forEach(c => {
+      c.className = `col-data col-cell-${k}`;
+      if(cls) c.classList.add(cls);
+    });
+    document.getElementById(`sub-${k}`).textContent = options[k].companyName + (k===correctKey?"(正解)":"");
+  });
+
+  const panel = document.getElementById("resultPanel");
+  panel.style.display = "block";
+  document.getElementById("resultVerdict").textContent = isCorrect ? "正解！" : "不正解...";
+  document.getElementById("resultExplanation").textContent = target.explanation;
+}
+
+window.onload = loadData;
+</script>
+</body>
+</html>
