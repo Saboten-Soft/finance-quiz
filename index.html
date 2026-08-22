@@ -1,0 +1,17 @@
+let quizDataset = [];
+
+// ページ読み込み時に外部JSONを取得
+async function loadGameData() {
+  try {
+    const res = await fetch('./data/quizData.json');
+    if (!res.ok) throw new Error('Data load failed');
+    quizDataset = await res.json();
+    initRound();
+  } catch (err) {
+    document.getElementById("companyName").textContent = "データ読み込みエラー";
+    document.getElementById("companyDesc").textContent = "data/quizData.json が見つからないか、取得に失敗しました。";
+    console.error(err);
+  }
+}
+
+window.onload = loadGameData;
