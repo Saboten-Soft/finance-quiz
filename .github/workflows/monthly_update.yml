@@ -2,14 +2,11 @@ name: Monthly Financial Data Update
 
 on:
   schedule:
-    # 毎月28日〜31日の14:50 UTC (日本時間 23:50) に起動
-    - cron: '50 14 28-31 * *'
-  workflow_dispatch: # 手動実行ボタン用
+    - cron: '50 14 28-31 * *' # 毎月月末付近の日本時間23:50に実行
+  workflow_dispatch: # 手動実行用ボタン
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
   update-data:
@@ -18,43 +15,40 @@ jobs:
       - name: Check if today is the last day of the month
         id: check-date
         run: |
-          # 明日が「1日」かどうかで月末判定
           TOMORROW=$(date -d "+1 day" +%d)
           if [ "$TOMORROW" = "01" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "is_month_end=true" >> $GITHUB_OUTPUT
+            echo "run_job=true" >> $GITHUB_ENV
           else
-            echo "is_month_end=false" >> $GITHUB_OUTPUT
+            echo "run_job=false" >> $GITHUB_ENV
           fi
 
       - name: Checkout repository
-        if: steps:check-date.outputs.is_month_end == 'true'
+        if: env.run_job == 'true'
         uses: actions/checkout@v4
 
       - name: Set up Python
-        if: steps:check-date.outputs.is_month_end == 'true'
+        if: env.run_job == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install dependencies
-        if: steps:check-date.outputs.is_month_end == 'true'
-        run: |
-          pip install -r scripts/requirements.txt
+        if: env.run_job == 'true'
+        run: pip install -r scripts/requirements.txt
 
       - name: Run Scraper
-        if: steps:check-date.outputs.is_month_end == 'true'
-        run: |
-          python scripts/fetch_data.py
+        if: env.run_job == 'true'
+        run: python scripts/fetch_data.py
 
-      - name: Commit and push if data changed
-        if: steps:check-date.outputs.is_month_end == 'true'
+      - name: Commit and push changes
+        if: env.run_job == 'true'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add data/quizData.json
           if git diff --staged --quiet; then
-            echo "No changes detected."
+            echo "No changes to commit."
           else
-            git commit -m "chore: auto-update financial quiz data for $(date +'%Y-%m')"
+            git commit -m "データ自動更新: $(date +'%Y-%m-%d')"
             git push
           fi
